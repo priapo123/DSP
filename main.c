@@ -23,7 +23,6 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,53 +40,28 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc1;
 
-UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+int f_v1 = 0;
+int f_v2 = 0;
+float v1 = 0;
+float v2 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/*Filtro pasa bajas
- * Fc=150Hz
- * Fs=1200HZ*/
-#define orden 17
-/*Coeficientes en matlab
- * filtro pasa bajas
- * orden 16
- * metodo ventana, rectangular */
-const float coeficientes_bk[orden]={
-		-0.00000000000000001073193563041456600732,
-		-0.035409040688569676236241434708063025028,
-		-0.058421936501128646224145768428570590913,
-		-0.049572656963997534240728981558277155273,
-		 0.00000000000000001073193563041456600732,
-		 0.082621094939995892714179603899538051337,
-		 0.17526580950338593867243730528571177274,
-		 0.247863284819987678142538811698614154011,
-		 0.275306889780652708221708735436550341547,
-		 0.247863284819987678142538811698614154011,
-		 0.17526580950338593867243730528571177274,
-		 0.082621094939995892714179603899538051337,
-		 0.00000000000000001073193563041456600732,
-		-0.049572656963997534240728981558277155273,
-		-0.058421936501128646224145768428570590913,
-		-0.035409040688569676236241434708063025028,
-		-0.00000000000000001073193563041456600732};
-volatile float memoria [orden];
-unsigned int y_n;
 
 /* USER CODE END 0 */
 
@@ -98,7 +72,8 @@ unsigned int y_n;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  float frequency = 0;
+  char msg[30];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -119,15 +94,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_USART2_UART_Init();
   MX_ADC1_Init();
-  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  char msg[30];
-
-  for (int var = 0; var < orden; var++) {
-	  memoria[var];
-}
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -137,26 +107,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,1);
-	  HAL_ADC_Start(&hadc1);
-	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  for (int k = orden; k!=1; k--) {
-		  memoria[k]=memoria[k-1];
-	  }
-	  memoria[1]=HAL_ADC_GetValue(&hadc1);
-	  y_n=0;
-	  for(int n=1; n<=orden;n++){
-		  y_n += coeficientes_bk[n]*memoria[n];
-	  }
-
-	  sprintf(msg,"%hu\r\n",y_n);
-	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg),HAL_MAX_DELAY);
-	  /*sprintf(msg,"%.3f\r\n",y_n);
-	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg),HAL_MAX_DELAY);*/
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,0);
-	  HAL_Delay(3);
+    if(f_v2 == 1){
+    	frequency = (v2-v1);
+    	frequency = 1000 / frequency;
+    	sprintf(msg, "Freq = %.3f Hz\r\n", frequency);
+    	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+    	f_v1 = 0;
+    	f_v2 = 0;
+    }
   }
-
   /* USER CODE END 3 */
 }
 
@@ -173,7 +132,6 @@ void SystemClock_Config(void)
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -185,7 +143,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -218,7 +175,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 1 */
 
   /* USER CODE END ADC1_Init 1 */
-
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc1.Instance = ADC1;
@@ -237,7 +193,6 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
   sConfig.Channel = ADC_CHANNEL_1;
@@ -254,35 +209,35 @@ static void MX_ADC1_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
+  * @brief USART2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+static void MX_USART2_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
+  /* USER CODE BEGIN USART2_Init 0 */
 
-  /* USER CODE END USART1_Init 0 */
+  /* USER CODE END USART2_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
+  /* USER CODE BEGIN USART2_Init 1 */
 
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
+  /* USER CODE BEGIN USART2_Init 2 */
 
-  /* USER CODE END USART1_Init 2 */
+  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -299,6 +254,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
@@ -310,10 +266,43 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
-
+int getF_v1(void){
+	return f_v1;
+}
+void setF_v1(int to){
+	f_v1 = to;
+}
+int getF_v2(void){
+	return f_v2;
+}
+void setF_v2(int to){
+	f_v2 = to;
+}
+float getV1(void){
+	return v1;
+}
+void setV1(int to){
+	v1 = to;
+}
+float getV2(void){
+	return v2;
+}
+void setV2(int to){
+	v2 = to;
+}
 /* USER CODE END 4 */
 
 /**
@@ -347,3 +336,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
