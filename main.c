@@ -21,8 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -60,6 +60,34 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/*Filtro pasa bajas
+ * Fc=150Hz
+ * Fs=1200HZ*/
+#define orden 17
+/*Coeficientes en matlab
+ * filtro pasa bajas
+ * orden 16
+ * metodo ventana, rectangular */
+const float coeficientes_bk[orden]={
+		-0.00000000000000001073193563041456600732,
+		-0.035409040688569676236241434708063025028,
+		-0.058421936501128646224145768428570590913,
+		-0.049572656963997534240728981558277155273,
+		 0.00000000000000001073193563041456600732,
+		 0.082621094939995892714179603899538051337,
+		 0.17526580950338593867243730528571177274,
+		 0.247863284819987678142538811698614154011,
+		 0.275306889780652708221708735436550341547,
+		 0.247863284819987678142538811698614154011,
+		 0.17526580950338593867243730528571177274,
+		 0.082621094939995892714179603899538051337,
+		 0.00000000000000001073193563041456600732,
+		-0.049572656963997534240728981558277155273,
+		-0.058421936501128646224145768428570590913,
+		-0.035409040688569676236241434708063025028,
+		-0.00000000000000001073193563041456600732};
+volatile float memoria [orden];
+unsigned int y_n;
 
 /* USER CODE END 0 */
 
@@ -70,14 +98,6 @@ static void MX_USART1_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	uint16_t raw;
-	char msg[10];
-	float y=0;
-	float y_n=0;
-	float alpha = 0.3;
-	float voltaje;
-	float coll = 1;
-	int cont = 1;
 
   /* USER CODE END 1 */
 
@@ -103,6 +123,11 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  char msg[30];
+
+  for (int var = 0; var < orden; var++) {
+	  memoria[var];
+}
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -112,41 +137,26 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,1);
+	  HAL_ADC_Start(&hadc1);
+	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+	  for (int k = orden; k!=1; k--) {
+		  memoria[k]=memoria[k-1];
+	  }
+	  memoria[1]=HAL_ADC_GetValue(&hadc1);
+	  y_n=0;
+	  for(int n=1; n<=orden;n++){
+		  y_n += coeficientes_bk[n]*memoria[n];
+	  }
 
-	  //Filtro EMA
-	  //HAL_ADC_Start(&hadc1);
-	  //HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
-	  // HAL_Delay(10);
-	  //HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  //raw = HAL_ADC_GetValue(&hadc1);
-	  //voltaje = ((float)raw)/4095*3300;
-	  //y=(alpha*voltaje)+(1-alpha)*y_n;
-	  //HAL_GPIO_Wri-tePin(GPIOC, GPIO_PIN_13, 0);
-	  //sprintf(msg,"%hu\r\n",raw);
-	  //HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-	  //HAL_Delay(1);
-	  //y_n=y;
-
-	  //Filtro SMA
-
-	      HAL_ADC_Start(&hadc1);
-	  	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
-	  	  // HAL_Delay(10);
-	  	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  	  raw = HAL_ADC_GetValue(&hadc1);
-	  	  voltaje = ((float)raw)/4095*3.3;
-	  	  coll = coll + voltaje;
-	  	  y=coll/cont;
-	  	  cont = cont + 1;
-	  	  y=(alpha*voltaje)+(1-alpha)*y_n;
-	  	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0);
-	  	  sprintf(msg,"%.3f",voltaje);
-	  	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-	  	  sprintf(msg, "%.3f\r\n", y);
-	  	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-	  	  HAL_Delay(500);
-
+	  sprintf(msg,"%hu\r\n",y_n);
+	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg),HAL_MAX_DELAY);
+	  /*sprintf(msg,"%.3f\r\n",y_n);
+	  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg),HAL_MAX_DELAY);*/
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13,0);
+	  HAL_Delay(3);
   }
+
   /* USER CODE END 3 */
 }
 
